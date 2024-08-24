@@ -1,0 +1,81 @@
+---
+title: "CreditCard"
+output: html_document
+date: "2024-08-24"
+---
+
+```{r}
+# Load the data from the CSV file
+df <- read.csv("C:/Users/DELL/OneDrive/Desktop/Data Analysis Internship/creditcard.csv")
+df
+```
+
+```{r}
+#install.packages("smotefamily")
+# Load necessary libraries
+library(dplyr)
+library(caret)
+library(randomForest)
+library(smotefamily)  # For SMOTE
+library(ranger)
+
+# Step 1: Explore the data
+table(df$Class)
+
+# Step 2: Data Preprocessing
+# Normalize 'Amount' and 'Time'
+df$Amount <- scale(df$Amount)
+df$Time <- scale(df$Time)
+
+# Define features (X) and target (y)
+X <- df %>% select(-Class)
+y <- df$Class
+
+# Step 3: Handle Class Imbalance using SMOTE
+smote_data <- SMOTE(X, y, K = 5, dup_size = 0)  # K: number of neighbors, dup_size: amount of SMOTE
+X_res <- smote_data$data[, -ncol(smote_data$data)]
+y_res <- smote_data$data$class
+
+# Combine X_res and y_res into a data frame for splitting
+df_resampled <- cbind(X_res, Class = y_res)
+
+# Random sampling: take only 50,000 data points
+set.seed(42)
+df_resampled <- df_resampled[sample(nrow(df_resampled), 50000), ]
+
+# Step 4: Split the Data into Training and Testing Sets
+trainIndex <- createDataPartition(df_resampled$Class, p = .7, list = FALSE, times = 1)
+trainData <- df_resampled[trainIndex, ]
+testData <- df_resampled[-trainIndex, ]
+
+# Convert 'Class' to a factor if it isn't already
+trainData$Class <- as.factor(trainData$Class)
+testData$Class <- as.factor(testData$Class)
+
+# Step 5: Train a Random Forest Classifier
+model <- ranger(Class ~ ., data = trainData, num_trees = 100, max_depth = 10)
+
+# Step 6: Evaluate the Model
+# Extract the predicted classes from the model prediction
+y_pred <- predict(model, testData)$predictions
+
+# Ensure 'y_pred' is a factor and has the same levels as 'testData$Class'
+y_pred <- factor(y_pred, levels = levels(testData$Class))
+
+# Calculate evaluation metrics
+conf_matrix <- confusionMatrix(y_pred, testData$Class)
+precision <- posPredValue(y_pred, testData$Class, positive = "1")  # Assuming '1' is the positive class
+recall <- sensitivity(y_pred, testData$Class, positive = "1")
+f1 <- (2 * precision * recall) / (precision + recall)
+
+# Output results
+print(paste("Precision:", precision))
+print(paste("Recall:", recall))
+print(paste("F1-Score:", f1))
+print("Confusion Matrix:")
+print(conf_matrix$table)
+print("Classification Report:")
+print(conf_matrix)
+
+```
+
